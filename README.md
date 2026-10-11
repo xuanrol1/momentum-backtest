@@ -13,6 +13,22 @@ portfolio return(t) = return[t]
 
 Month `t−1` is skipped, and month `t` is never used to rank stocks for month `t`. An automated test changes the holding-month return and verifies that the signal and portfolio membership do not change.
 
+## Results
+
+Default run (`python run_backtest.py`): first 50 current S&P 500 constituents, April 2016 to March 2026, 120 monthly long–short returns.
+
+| Statistic | Value |
+| --- | ---: |
+| Mean monthly return | 0.45% |
+| Annualized return (geometric) | 0.54% |
+| Annualized volatility | 30.4% |
+| Annualized Sharpe (zero risk-free rate) | 0.18 |
+| t-statistic (p-value) | 0.56 (0.58) |
+| Maximum drawdown | −68.3% |
+| Market beta (p-value) | −0.25 (0.18) |
+
+Once the look-ahead bias is removed, the 12–1 momentum premium in this small universe is **not statistically distinguishable from zero**. With only about five stocks per leg, volatility is high and the long–short book suffers a deep drawdown. This is the honest result; the inflated Sharpe of the original analysis came from the timing error, not from momentum.
+
 ## Monte Carlo placebo test
 
 To show how large the original bias was, `run_placebo.py` simulates 200 samples of pure-noise returns (50 stocks, 134 months, IID normal with 8% monthly volatility), so the true momentum premium is zero. Each sample is run through both the original look-ahead signal (12 months ending at `t`) and the corrected 12–1 signal:
