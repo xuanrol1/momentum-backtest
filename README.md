@@ -27,6 +27,10 @@ Default run (`python run_backtest.py`): first 50 current S&P 500 constituents, A
 | Maximum drawdown | −68.3% |
 | Market beta (p-value) | −0.25 (0.18) |
 
+![Cumulative winner-minus-loser return, 2016–2026](docs/cumulative_return.png)
+
+The two largest losses are classic momentum crashes: in spring 2020 the losers of the COVID sell-off rebounded sharply while past winners lagged, and in early 2023 the beaten-down 2022 losers rallied as the previous year's winners reversed.
+
 Once the look-ahead bias is removed, the 12–1 momentum premium in this small universe is **not statistically distinguishable from zero**. With only about five stocks per leg, volatility is high and the long–short book suffers a deep drawdown. This is the honest result; the inflated Sharpe of the original analysis came from the timing error, not from momentum.
 
 ## Monte Carlo placebo test
