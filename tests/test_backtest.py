@@ -26,3 +26,9 @@ def test_statistics():
     out=performance_statistics(pd.DataFrame({"long_short_return":[.01,-.02,.03,.01],"market_return":[.02,-.01,.01,0]}))
     assert out["months"]==4 and all(np.isfinite(x) for x in out.values())
 
+
+
+def test_placebo_detects_lookahead_bias():
+    from momentum.placebo import monte_carlo_placebo
+    sims=monte_carlo_placebo(n_sims=5, n_stocks=50, n_months=60, seed=1)
+    assert sims.sharpe_lookahead.min() > 3 and sims.sharpe_corrected.abs().max() < 1.5

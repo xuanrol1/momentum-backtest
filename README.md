@@ -13,6 +13,23 @@ portfolio return(t) = return[t]
 
 Month `t−1` is skipped, and month `t` is never used to rank stocks for month `t`. An automated test changes the holding-month return and verifies that the signal and portfolio membership do not change.
 
+## Monte Carlo placebo test
+
+To show how large the original bias was, `run_placebo.py` simulates 200 samples of pure-noise returns (50 stocks, 134 months, IID normal with 8% monthly volatility), so the true momentum premium is zero. Each sample is run through both the original look-ahead signal (12 months ending at `t`) and the corrected 12–1 signal:
+
+| Pipeline | Mean annualized Sharpe | 5th–95th percentile |
+| --- | ---: | ---: |
+| Original (signal includes month `t`) | 5.48 | 4.83 to 6.18 |
+| Corrected (months `t−12` to `t−2`) | −0.03 | −0.55 to 0.58 |
+
+The original pipeline reports a Sharpe above 5 on data that contain no signal at all; the corrected pipeline is centred on zero, as it should be.
+
+```bash
+python run_placebo.py --sims 200 --seed 0
+```
+
+Results are written to `results/placebo_summary.json`, `results/placebo_simulations.csv`, and `results/placebo_sharpe.png`.
+
 The script also:
 
 - averages simple returns within portfolios;
