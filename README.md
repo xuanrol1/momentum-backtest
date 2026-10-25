@@ -31,7 +31,7 @@ Default run (`python run_backtest.py`): first 50 current S&P 500 constituents, A
 
 The two largest losses are classic momentum crashes: in spring 2020 the losers of the COVID sell-off rebounded sharply while past winners lagged, and in early 2023 the beaten-down 2022 losers rallied as the previous year's winners reversed.
 
-Once the look-ahead bias is removed, the 12–1 momentum premium in this small universe is **not statistically distinguishable from zero**. With only about five stocks per leg, volatility is high and the long–short book suffers a deep drawdown. This is the honest result; the inflated Sharpe of the original analysis came from the timing error, not from momentum.
+Once the look-ahead bias is removed, the estimated premium in this small universe is **not statistically distinguishable from zero**. That is a statement about power, not about momentum: with 120 monthly observations the standard error of an annualized Sharpe ratio is roughly 0.3, so this sample can neither confirm nor rule out a premium of the size reported in the literature. With only about five stocks per leg, volatility is also high and the long–short book suffers a deep drawdown. The inflated Sharpe of the original analysis came from the timing error, not from momentum.
 
 ## Monte Carlo placebo test
 
@@ -48,9 +48,15 @@ The original pipeline reports a Sharpe above 5 on data that contain no signal at
 python run_placebo.py --sims 200 --seed 0
 ```
 
-Results are written to `results/placebo_summary.json`, `results/placebo_simulations.csv`, and `results/placebo_sharpe.png`.
+![Annualized Sharpe on pure-noise returns: look-ahead vs corrected signal](docs/placebo_sharpe.png)
 
-The script also:
+Results are written to `results/placebo_summary.json`, `results/placebo_simulations.csv`, and `results/placebo_sharpe.png`; a committed copy of the summary and chart for the default run is in `docs/`.
+
+## Method
+
+Each month, stocks are ranked by their 12–1 signal. The strategy buys the top decile and shorts the bottom decile with equal weights. The monthly return is the mean winner return minus the mean loser return.
+
+`run_backtest.py` also:
 
 - averages simple returns within portfolios;
 - compounds the long–short return geometrically;
@@ -58,9 +64,7 @@ The script also:
 - reports annualized Sharpe, maximum drawdown, a t-test, and market beta;
 - saves the exact universe, monthly returns, statistics, and chart.
 
-## Method
-
-Each month, stocks are ranked by their 12–1 signal. The strategy buys the top decile and shorts the bottom decile with equal weights. The monthly return is the mean winner return minus the mean loser return.
+Returns are indexed on a complete calendar-month grid before the signal is computed. If any month inside a stock's 11-month signal window is missing, that stock has no signal for the month rather than a silently shifted window.
 
 The default sample uses the first 50 symbols from the current S&P 500 table to remain comparable with the original coursework. Use all current constituents with `--max-tickers 0`, or provide a researched point-in-time universe with `--tickers-file`.
 
@@ -71,8 +75,6 @@ The default sample uses the first 50 symbols from the current S&P 500 table to r
 - **Data source:** Yahoo Finance data accessed through `yfinance` is not a research-grade point-in-time database.
 - **Trading frictions:** costs, short borrow, slippage, taxes, and capacity are omitted.
 - **Inference:** the ordinary t-statistic does not correct for every form of dependence or data snooping.
-
-These limitations are intentionally disclosed rather than hidden behind an attractive statistic.
 
 ## Run it
 
@@ -99,10 +101,13 @@ Run the checks locally with `pytest`.
 
 ```text
 momentum/
-tests/
-run_backtest.py
+  backtest.py     signal, decile portfolios, performance and regime statistics
+  data.py         ticker list, Yahoo Finance download, monthly returns
+  placebo.py      Monte Carlo placebo (look-ahead vs corrected signal)
+tests/            timing, alignment and statistics checks
+docs/             figures and summary committed for the README
+run_backtest.py   main study
+run_placebo.py    placebo experiment
 requirements.txt
 README.md
 ```
-
-The corrected Sharpe ratio should be materially lower than the previously reported value near 2.9. That is a feature of a credible research process: correct timing, transparent assumptions, and reproducibility matter more than a visually impressive number.
