@@ -12,12 +12,19 @@ def build_momentum_panel(monthly_returns: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"monthly_returns is missing columns: {sorted(missing)}")
     panel = monthly_returns.loc[:, ["date", "symbol", "ret"]].copy()
     panel["date"] = pd.to_datetime(panel["date"]).dt.to_period("M").dt.to_timestamp("M")
+    if panel.duplicated(["symbol", "date"]).any():
+        raise ValueError("monthly_returns has duplicate (symbol, date) rows")
     panel = panel.sort_values(["symbol", "date"]).reset_index(drop=True)
+    # Work on a complete calendar-month grid so a missing month cannot shift the window.
+    # A missing month inside the 11-month window makes the signal NaN (strict, no silent misalignment).
+    wide = panel.pivot(index="date", columns="symbol", values="ret")
+    wide = wide.reindex(pd.date_range(wide.index.min(), wide.index.max(), freq="ME"))
     # shift(2) excludes both holding month t and skipped month t-1.
-    panel["momentum_12_1"] = panel.groupby("symbol", sort=False)["ret"].transform(
-        lambda s: np.expm1(np.log1p(s).shift(2).rolling(11, min_periods=11).sum())
-    )
-    return panel
+    signal = np.expm1(np.log1p(wide).shift(2).rolling(11, min_periods=11).sum())
+    signal = signal.rename_axis(index="date", columns="symbol").stack(future_stack=True)
+    signal = signal.rename("momentum_12_1").reset_index()
+    panel = panel.merge(signal, on=["date", "symbol"], how="left")
+    return panel.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
 def _assign_quantiles(values: pd.Series, quantiles: int) -> pd.Series:

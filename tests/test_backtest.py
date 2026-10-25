@@ -14,6 +14,28 @@ def test_signal_window():
     assert np.isclose(panel.loc[12,"momentum_12_1"], np.prod(1+data.loc[0:10,"ret"])-1)
 
 
+def test_missing_month_does_not_misalign_window():
+    data = synthetic_returns(1, 20)
+    dates = sorted(data.date.unique())
+    gap = data[data.date != dates[5]].reset_index(drop=True)  # drop calendar month 5
+    panel = build_momentum_panel(gap).set_index("date")
+    # Windows that contain the missing month must be NaN, not silently shifted.
+    for i in (12, 13, 14, 15, 16, 17):
+        assert np.isnan(panel.loc[dates[i], "momentum_12_1"])
+    # First window clear of the gap (months 6..16 for holding month 18) is exact.
+    expected = np.prod(1 + data.loc[data.date.isin(dates[6:17]), "ret"]) - 1
+    assert np.isclose(panel.loc[dates[18], "momentum_12_1"], expected)
+
+
+def test_duplicate_rows_rejected():
+    data = synthetic_returns(1, 14)
+    try:
+        build_momentum_panel(pd.concat([data, data.iloc[[0]]]))
+    except ValueError:
+        return
+    raise AssertionError("duplicate rows should raise")
+
+
 def test_holding_return_cannot_change_membership():
     base=synthetic_returns(); shocked=base.copy(); date=shocked.date.max()
     shocked.loc[(shocked.date==date)&(shocked.symbol=="S00"),"ret"]=50
