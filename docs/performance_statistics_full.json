@@ -1,0 +1,12 @@
+{
+  "annualized_return": 0.004253951702786862,
+  "annualized_sharpe_zero_rf": 0.12078227268165807,
+  "annualized_volatility": 0.19810535565645915,
+  "market_beta": -0.32731260553651603,
+  "market_beta_p_value": 0.006329391700770185,
+  "maximum_drawdown": -0.44056690522351183,
+  "mean_monthly_return": 0.001993967923882942,
+  "months": 120,
+  "p_value_two_sided": 0.7031818253989073,
+  "t_statistic": 0.3819470826455728
+}
