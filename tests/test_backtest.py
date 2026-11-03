@@ -107,3 +107,35 @@ def test_turnover_full_replacement_and_no_change():
     assert np.isclose(out["mean_monthly_turnover_long"], 1.0)    # 0 then 2
     assert np.isclose(out["mean_monthly_turnover_short"], 0.0)
     assert np.isclose(out["break_even_cost_bps"], 0.01 / 1.0 * 1e4)
+
+
+FRENCH_SAMPLE = """This file was created using the 202609 CRSP database.
+It contains a momentum factor, constructed from six value-weight portfolios.
+
+,Mom
+202001,   1.50
+202002,  -2.25
+202003, -99.99
+202004,   0.75
+
+ Annual Factors: January-December
+,Mom
+2020,   5.00
+"""
+
+
+def test_parse_french_monthly_keeps_only_monthly_rows_in_decimals():
+    from momentum.benchmark import parse_french_monthly
+    umd = parse_french_monthly(FRENCH_SAMPLE)
+    assert list(umd.date.dt.strftime("%Y-%m")) == ["2020-01", "2020-02", "2020-04"]   # -99.99 dropped
+    assert np.allclose(umd.umd, [0.015, -0.0225, 0.0075])
+
+
+def test_compare_with_umd_recovers_beta_and_correlation():
+    from momentum.benchmark import compare_with_umd
+    rng = np.random.default_rng(2)
+    dates = pd.date_range("2010-01-31", periods=120, freq="ME")
+    umd = pd.DataFrame({"date": dates, "umd": rng.normal(0.005, 0.04, 120)})
+    strategy = pd.DataFrame({"date": dates, "long_short_return": 1.5 * umd.umd + rng.normal(0, 0.01, 120)})
+    out, both = compare_with_umd(strategy, umd)
+    assert out["months"] == 120 and abs(out["beta_on_umd"] - 1.5) < 0.1 and out["correlation"] > 0.9
