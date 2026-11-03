@@ -54,3 +54,33 @@ def test_placebo_detects_lookahead_bias():
     from momentum.placebo import monte_carlo_placebo
     sims=monte_carlo_placebo(n_sims=5, n_stocks=50, n_months=60, seed=1)
     assert sims.sharpe_lookahead.min() > 3 and sims.sharpe_corrected.abs().max() < 1.5
+
+
+def test_missing_holding_return_cannot_change_membership():
+    """A stock that stops trading during month t must stay ranked: survival is not known ex ante."""
+    rng = np.random.default_rng(0)
+    dates = pd.date_range("2020-01-31", periods=16, freq="ME")
+    base = pd.DataFrame([{"date": d, "symbol": f"S{s:02}", "ret": rng.normal(0.01, 0.08)}
+                         for s in range(20) for d in dates])
+    last = dates[-1]
+    _, ranked = form_long_short(build_momentum_panel(base))
+    top = ranked[ranked.date == last].sort_values("momentum_12_1").symbol.iloc[-1]
+    delisted = base[~((base.date == last) & (base.symbol == top))]
+    strategy, ranked2 = form_long_short(build_momentum_panel(delisted), missing_return=-0.3)
+    cols = ["symbol", "momentum_12_1", "bucket"]
+    pd.testing.assert_frame_equal(
+        ranked[ranked.date == last][cols].reset_index(drop=True),
+        ranked2[ranked2.date == last][cols].reset_index(drop=True))
+    # The delisted winner earns the assumed delisting return.
+    row = ranked2[(ranked2.date == last) & (ranked2.symbol == top)].iloc[0]
+    assert row.ret == -0.3 and row.missing_return
+    assert strategy.loc[strategy.date == last, "n_long_missing"].item() == 1
+
+
+def test_stock_without_price_at_formation_is_not_ranked():
+    """No price at the end of month t-1 means the stock cannot be bought at the start of t."""
+    data = synthetic_returns(20, 16)
+    dates = sorted(data.date.unique())
+    gone = data[~((data.symbol == "S05") & (data.date >= dates[-2]))]   # stops after month -3
+    _, ranked = form_long_short(build_momentum_panel(gone))
+    assert "S05" not in set(ranked[ranked.date == dates[-1]].symbol)
