@@ -1,0 +1,13 @@
+{
+  "months": 120,
+  "first_month": "2016-04",
+  "last_month": "2026-03",
+  "correlation": 0.8825011346852063,
+  "sharpe_backtest": 0.12018440592513073,
+  "sharpe_umd": 0.14554040786890887,
+  "mean_monthly_backtest": 0.001983152797601531,
+  "mean_monthly_umd": 0.001605833333333333,
+  "beta_on_umd": 1.3197949047774697,
+  "alpha_monthly": -0.00013621785365362007,
+  "alpha_t_statistic": -0.05522336438330712
+}

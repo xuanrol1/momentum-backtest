@@ -17,18 +17,23 @@ A second, subtler form of the same error was fixed later. Ranking used to start 
 
 ## Results
 
-Main run (`python run_backtest.py --max-tickers 0`): all current S&P 500 constituents that Yahoo Finance has prices for, April 2016 to March 2026, 120 monthly long–short returns, about 48 stocks per leg. Smaller universes (the first 50 and 100 symbols of the constituent table) are shown as a sensitivity check.
+Main run (`python run_backtest.py --max-tickers 0`, November 2026): all current S&P 500 constituents that Yahoo Finance has prices for (the exact list is in `docs/universe_full.txt`), April 2016 to March 2026, 120 monthly long–short returns, about 48 stocks per leg. Smaller universes (the first 50 and 100 symbols of the constituent table, from the October 2026 run) are shown as a sensitivity check.
 
 | Statistic | Full universe | First 100 | First 50 |
 | --- | ---: | ---: | ---: |
 | Stocks per leg (approx.) | 48 | 10 | 5 |
 | Mean monthly return | 0.20% | 0.91% | 0.45% |
-| Annualized return (geometric) | 0.43% | 6.95% | 0.54% |
+| Annualized return (geometric) | 0.41% | 6.95% | 0.54% |
 | Annualized volatility | 19.8% | 28.7% | 30.4% |
 | Annualized Sharpe (zero risk-free rate) | 0.12 | 0.38 | 0.18 |
 | t-statistic (p-value) | 0.38 (0.70) | 1.21 (0.23) | 0.56 (0.58) |
+| Newey–West t-statistic, 4 lags (p-value) | 0.44 (0.66) | — | — |
 | Maximum drawdown | −44.1% | −64.1% | −68.3% |
 | Market beta (p-value) | −0.33 (0.006) | −0.27 (0.12) | −0.25 (0.18) |
+| Monthly turnover, long + short legs | 1.11 | — | — |
+| Break-even trading cost (bps per unit traded) | 23 | — | — |
+
+The market beta of the full-universe run is measured against the S&P 500 total-return index; the smaller universes used the price index.
 
 ![Cumulative winner-minus-loser return, full universe, 2016–2026](docs/cumulative_return_full.png)
 
@@ -39,6 +44,27 @@ In the full universe the estimated premium is **not statistically distinguishabl
 The three universe sizes give Sharpe ratios of 0.18, 0.38 and 0.12, which is not monotonic in portfolio size. The first 50 and 100 symbols are alphabetical slices of today's constituent table with no economic rationale, so the spread between them is best read as sampling noise, and the full-universe run is the headline result. Larger universes mainly reduce volatility and drawdown, because each leg holds many more names.
 
 The long–short portfolio is dollar-neutral but not market-neutral: the full-universe market beta is −0.33 (p = 0.006), so the book tends to lose when the market rises. The inflated Sharpe of the original analysis came from the timing error, not from momentum.
+
+### Comparison with the Ken French momentum factor
+
+![Cumulative return of this backtest and Ken French UMD, 2016–2026](docs/umd_comparison.png)
+
+Over the same 120 months, the backtest's monthly returns have a **correlation of 0.88** with UMD, the momentum factor in Kenneth French's data library (`python run_compare_umd.py`). UMD is value-weighted and built from all NYSE, AMEX and Nasdaq stocks, so the two are constructed quite differently, yet they move together closely: the pipeline measures the same effect as the standard factor.
+
+| | This backtest | UMD |
+| --- | ---: | ---: |
+| Mean monthly return | 0.20% | 0.16% |
+| Annualized Sharpe | 0.12 | 0.15 |
+
+UMD itself earned a Sharpe of only 0.15 in this period, so **the weak result reflects a weak decade for momentum, not an error in the code**. Regressing the backtest on UMD gives a beta of 1.32 and a monthly alpha of −0.01% (t = −0.06): the equal-weighted top and bottom deciles of about 48 stocks are a more concentrated, more volatile version of the same factor, with nothing left over.
+
+### Trading costs
+
+Each leg replaces about 55% of its holdings every month (turnover 0.55 per leg, 1.11 for the long–short book). The mean return of 0.20% a month covers trading costs up to 23 bps per unit traded; a round trip of 10 bps per unit, for example, would cost about 0.11% a month and remove more than half the premium. Borrow fees for the short leg would come on top.
+
+### Effect of the survival fix
+
+Rerunning with eligibility based only on information at formation changes nothing in this sample: no held stock was missing a holding-month return (`held_stock_months_without_return` = 0), because a universe of today's constituents contains no stocks that stopped trading. The fix matters for a point-in-time universe with delistings, which is the natural next step for this study.
 
 ## Monte Carlo placebo test
 
@@ -74,7 +100,7 @@ Each month, stocks are ranked by their 12–1 signal. The strategy buys the top 
 
 Returns are indexed on a complete calendar-month grid before the signal is computed. If any month inside a stock's 11-month signal window is missing, that stock has no signal for the month rather than a silently shifted window.
 
-The headline run uses all current S&P 500 constituents (`--max-tickers 0`). Tickers for which Yahoo returns no prices in the window (three in the October 2026 run) are dropped. The script's default is the first 50 symbols of the current S&P 500 table, kept for comparability with the original coursework; provide a researched point-in-time universe with `--tickers-file`.
+The headline run uses all current S&P 500 constituents (`--max-tickers 0`). Tickers for which Yahoo returns no prices in the window (four in the November 2026 run) are dropped. The script's default is the first 50 symbols of the current S&P 500 table, kept for comparability with the original coursework; provide a researched point-in-time universe with `--tickers-file`.
 
 ## External benchmark: Ken French UMD
 
