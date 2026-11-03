@@ -13,6 +13,8 @@ portfolio return(t) = return[t]
 
 Month `t−1` is skipped, and month `t` is never used to rank stocks for month `t`. An automated test changes the holding-month return and verifies that the signal and portfolio membership do not change.
 
+A second, subtler form of the same error was fixed later. Ranking used to start by dropping stocks with no return in month `t`, so whether a stock survived the holding month decided whether it could be ranked for that month, and a stock that stopped trading mid-month silently left both its decile and the decile breakpoints. Eligibility now uses only what is known at formation: a signal, and a price at the end of month `t−1`. A held stock with no return in month `t` stays in its portfolio and earns an assumed delisting return (`--missing-return`, 0 by default). A second test removes a winner's holding-month return and checks that membership is unchanged.
+
 ## Results
 
 Main run (`python run_backtest.py --max-tickers 0`): all current S&P 500 constituents that Yahoo Finance has prices for, April 2016 to March 2026, 120 monthly long–short returns, about 48 stocks per leg. Smaller universes (the first 50 and 100 symbols of the constituent table) are shown as a sensitivity check.
@@ -66,12 +68,22 @@ Each month, stocks are ranked by their 12–1 signal. The strategy buys the top 
 - averages simple returns within portfolios;
 - compounds the long–short return geometrically;
 - labels regimes ex ante using market returns through `t−1`;
-- reports annualized Sharpe, maximum drawdown, a t-test, and market beta;
+- reports annualized Sharpe, maximum drawdown, a t-test, a Newey–West t-test (automatic lag ⌊4 (T/100)^(2/9)⌋, 4 for 120 months), and market beta against the S&P 500 total-return index (`^SP500TR`, which includes dividends like the adjusted stock prices; `--market` changes it);
+- reports monthly turnover of each leg (Σ|w_t − w_(t−1)|, ignoring price drift) and the break-even trading cost: the cost per unit traded, in basis points, at which the mean monthly return would fall to zero (meaningful only when the mean is positive);
 - saves the exact universe, monthly returns, statistics, and chart.
 
 Returns are indexed on a complete calendar-month grid before the signal is computed. If any month inside a stock's 11-month signal window is missing, that stock has no signal for the month rather than a silently shifted window.
 
 The headline run uses all current S&P 500 constituents (`--max-tickers 0`). Tickers for which Yahoo returns no prices in the window (three in the October 2026 run) are dropped. The script's default is the first 50 symbols of the current S&P 500 table, kept for comparability with the original coursework; provide a researched point-in-time universe with `--tickers-file`.
+
+## External benchmark: Ken French UMD
+
+`run_compare_umd.py` downloads the momentum factor (UMD) from Kenneth French's data library and compares it with the backtest's monthly long–short returns over the common months: correlation, Sharpe ratios, and a regression of the backtest on UMD. UMD is built from all NYSE, AMEX and Nasdaq stocks with value weights, so the two will not match exactly, but a strong positive correlation shows the pipeline captures the same effect, and it separates "momentum was weak in 2016–2026" from "the code is wrong".
+
+```bash
+python run_backtest.py --max-tickers 0
+python run_compare_umd.py        # writes results/umd_comparison.json and results/umd_comparison.png
+```
 
 ## Important limitations
 
@@ -79,7 +91,8 @@ The headline run uses all current S&P 500 constituents (`--max-tickers 0`). Tick
 - **Small portfolios:** in the 50- and 100-stock runs each leg holds only about five to ten names; the full-universe run holds about 48.
 - **Data source:** Yahoo Finance data accessed through `yfinance` is not a research-grade point-in-time database.
 - **Trading frictions:** costs, short borrow, slippage, taxes, and capacity are omitted.
-- **Inference:** the ordinary t-statistic does not correct for every form of dependence or data snooping.
+- **Inference:** the Newey–West t-statistic allows for autocorrelation, but neither test corrects for data snooping.
+- **Delisting returns:** a held stock that stops trading is assumed to earn `--missing-return` (0) for the month; research databases record the actual delisting return. With today's constituents as the universe this case is rare.
 
 ## Run it
 
@@ -93,7 +106,7 @@ python run_backtest.py --start 2016-04-01 --end 2026-04-01 --max-tickers 0    # 
 python run_backtest.py --max-tickers 50 --results-dir results_50                 # small-universe comparison
 ```
 
-The end date is exclusive. Prices are cached under `data/`; generated tables and figures go to `results/`.
+The end date is exclusive. Prices are cached under `data/`; generated tables and figures go to `results/`. The constituent list is downloaded from Wikipedia at run time, so it changes over time; the exact universe of the headline run is committed as `docs/universe_full.txt` and can be reused with `--tickers-file docs/universe_full.txt`.
 
 For a custom universe, create a text file containing one ticker per line or comma-separated tickers:
 
@@ -110,10 +123,12 @@ momentum/
   backtest.py     signal, decile portfolios, performance and regime statistics
   data.py         ticker list, Yahoo Finance download, monthly returns
   placebo.py      Monte Carlo placebo (look-ahead vs corrected signal)
+  benchmark.py    Ken French UMD download and comparison
 tests/            timing, alignment and statistics checks
 docs/             figures and summary committed for the README
 run_backtest.py   main study
 run_placebo.py    placebo experiment
+run_compare_umd.py  comparison with the Ken French momentum factor
 requirements.txt
 README.md
 ```
