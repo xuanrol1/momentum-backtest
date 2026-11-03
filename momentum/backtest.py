@@ -1,4 +1,5 @@
 """Pure backtest functions with explicit month-t information timing."""
+
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -24,11 +25,17 @@ def build_momentum_panel(monthly_returns: pd.DataFrame) -> pd.DataFrame:
     # A stock can be traded at the start of month t only if it had a price at the end of
     # month t-1, which is known when the portfolio is formed.
     tradable = wide.shift(1).notna()
-    grid = pd.DataFrame({
-        "ret": wide.stack(future_stack=True),
-        "momentum_12_1": signal.stack(future_stack=True),
-        "tradable": tradable.stack(future_stack=True),
-    }).rename_axis(["date", "symbol"]).reset_index()
+    grid = (
+        pd.DataFrame(
+            {
+                "ret": wide.stack(future_stack=True),
+                "momentum_12_1": signal.stack(future_stack=True),
+                "tradable": tradable.stack(future_stack=True),
+            }
+        )
+        .rename_axis(["date", "symbol"])
+        .reset_index()
+    )
     # Keep a row whenever the stock has a return or a signal, so a stock with a signal but
     # no holding-month return (it stopped trading during month t) is still ranked.
     grid = grid[grid.ret.notna() | grid.momentum_12_1.notna()]
@@ -45,8 +52,9 @@ def _assign_quantiles(values: pd.Series, quantiles: int) -> pd.Series:
     return result
 
 
-def form_long_short(panel: pd.DataFrame, quantiles: int = 10,
-                    missing_return: float = 0.0) -> tuple[pd.DataFrame, pd.DataFrame]:
+def form_long_short(
+    panel: pd.DataFrame, quantiles: int = 10, missing_return: float = 0.0
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sort stocks into quantiles on information available at the start of month t.
 
     Eligibility uses only the signal and whether the stock was tradable at the end of
@@ -66,14 +74,23 @@ def form_long_short(panel: pd.DataFrame, quantiles: int = 10,
         _assign_quantiles, quantiles=quantiles
     )
     ranked = ranked.dropna(subset=["bucket"])
-    legs = ranked.groupby(["date", "bucket"], observed=True).agg(
-        **{"return": ("ret", "mean"), "n_stocks": ("ret", "size"),
-           "n_missing": ("missing_return", "sum")}
-    ).reset_index()
+    legs = (
+        ranked.groupby(["date", "bucket"], observed=True)
+        .agg(
+            **{
+                "return": ("ret", "mean"),
+                "n_stocks": ("ret", "size"),
+                "n_missing": ("missing_return", "sum"),
+            }
+        )
+        .reset_index()
+    )
     low = legs.loc[legs.bucket == 1, ["date", "return", "n_stocks", "n_missing"]].rename(
-        columns={"return": "short_return", "n_stocks": "n_short", "n_missing": "n_short_missing"})
+        columns={"return": "short_return", "n_stocks": "n_short", "n_missing": "n_short_missing"}
+    )
     high = legs.loc[legs.bucket == quantiles, ["date", "return", "n_stocks", "n_missing"]].rename(
-        columns={"return": "long_return", "n_stocks": "n_long", "n_missing": "n_long_missing"})
+        columns={"return": "long_return", "n_stocks": "n_long", "n_missing": "n_long_missing"}
+    )
     strategy = high.merge(low, on="date", how="inner").sort_values("date")
     strategy["long_short_return"] = strategy.long_return - strategy.short_return
     strategy["cumulative_return"] = (1 + strategy.long_short_return).cumprod() - 1
@@ -84,9 +101,13 @@ def add_market_regime(strategy: pd.DataFrame, market_returns: pd.DataFrame) -> p
     market = market_returns.loc[:, ["date", "market_return"]].copy().sort_values("date")
     market["date"] = pd.to_datetime(market.date).dt.to_period("M").dt.to_timestamp("M")
     market["market_trailing_12m"] = np.expm1(
-        np.log1p(market.market_return).shift(1).rolling(12, min_periods=12).sum())
-    market["regime"] = np.where(market.market_trailing_12m.isna(), pd.NA,
-        np.where(market.market_trailing_12m > 0, "Bull", "Bear"))
+        np.log1p(market.market_return).shift(1).rolling(12, min_periods=12).sum()
+    )
+    market["regime"] = np.where(
+        market.market_trailing_12m.isna(),
+        pd.NA,
+        np.where(market.market_trailing_12m > 0, "Bull", "Bear"),
+    )
     return strategy.merge(market, on="date", how="left")
 
 
@@ -97,12 +118,16 @@ def performance_statistics(data: pd.DataFrame) -> dict[str, float | int]:
     vol = r.std(ddof=1)
     wealth = (1 + r).cumprod()
     test = stats.ttest_1samp(r, 0.0, nan_policy="omit")
-    out = {"months": int(len(r)), "mean_monthly_return": float(r.mean()),
-        "annualized_return": float((1+r).prod() ** (12/len(r)) - 1),
-        "annualized_volatility": float(vol*np.sqrt(12)),
-        "annualized_sharpe_zero_rf": float(r.mean()/vol*np.sqrt(12)),
-        "maximum_drawdown": float((wealth/wealth.cummax()-1).min()),
-        "t_statistic": float(test.statistic), "p_value_two_sided": float(test.pvalue)}
+    out = {
+        "months": int(len(r)),
+        "mean_monthly_return": float(r.mean()),
+        "annualized_return": float((1 + r).prod() ** (12 / len(r)) - 1),
+        "annualized_volatility": float(vol * np.sqrt(12)),
+        "annualized_sharpe_zero_rf": float(r.mean() / vol * np.sqrt(12)),
+        "maximum_drawdown": float((wealth / wealth.cummax() - 1).min()),
+        "t_statistic": float(test.statistic),
+        "p_value_two_sided": float(test.pvalue),
+    }
     # Newey-West t-statistic: robust to autocorrelation and heteroskedasticity in the
     # monthly returns, with the usual automatic lag 4 (T/100)^(2/9).
     lags = int(np.floor(4 * (len(r) / 100) ** (2 / 9)))
@@ -121,16 +146,23 @@ def performance_statistics(data: pd.DataFrame) -> dict[str, float | int]:
 def regime_statistics(data: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for regime, group in data.dropna(subset=["regime"]).groupby("regime"):
-        r = group.long_short_return.dropna(); vol = r.std(ddof=1)
-        rows.append({"regime": regime, "months": len(r), "mean_monthly_return": r.mean(),
-            "annualized_sharpe_zero_rf": r.mean()/vol*np.sqrt(12) if vol > 0 else np.nan,
-            "t_statistic": r.mean()/(vol/np.sqrt(len(r))) if vol > 0 else np.nan})
+        r = group.long_short_return.dropna()
+        vol = r.std(ddof=1)
+        rows.append(
+            {
+                "regime": regime,
+                "months": len(r),
+                "mean_monthly_return": r.mean(),
+                "annualized_sharpe_zero_rf": r.mean() / vol * np.sqrt(12) if vol > 0 else np.nan,
+                "t_statistic": r.mean() / (vol / np.sqrt(len(r))) if vol > 0 else np.nan,
+            }
+        )
     return pd.DataFrame(rows)
 
 
-
-def turnover_statistics(strategy: pd.DataFrame, ranked: pd.DataFrame,
-                        quantiles: int = 10) -> dict[str, float]:
+def turnover_statistics(
+    strategy: pd.DataFrame, ranked: pd.DataFrame, quantiles: int = 10
+) -> dict[str, float]:
     """Monthly turnover of the equal-weighted legs and the break-even trading cost.
 
     Each leg holds weight 1/n in each of its n stocks. Turnover of a leg in month t is

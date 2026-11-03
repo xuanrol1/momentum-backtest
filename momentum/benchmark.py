@@ -1,4 +1,5 @@
 """Ken French momentum factor (UMD) as an external benchmark for the backtest."""
+
 from __future__ import annotations
 import io
 import re
@@ -8,8 +9,9 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-UMD_URL = ("https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/"
-           "F-F_Momentum_Factor_CSV.zip")
+UMD_URL = (
+    "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/" "F-F_Momentum_Factor_CSV.zip"
+)
 
 
 def parse_french_monthly(text: str) -> pd.DataFrame:
@@ -26,7 +28,7 @@ def parse_french_monthly(text: str) -> pd.DataFrame:
             started = True
             rows.append((m.group(1), float(m.group(2))))
         elif started:
-            break                       # first non-monthly line after the block: annual data follow
+            break  # first non-monthly line after the block: annual data follow
     if not rows:
         raise ValueError("no monthly rows found")
     out = pd.DataFrame(rows, columns=["yyyymm", "umd"])
@@ -52,15 +54,17 @@ def compare_with_umd(strategy: pd.DataFrame, umd: pd.DataFrame) -> tuple[dict, p
         raise ValueError("fewer than 12 overlapping months")
     sharpe = lambda r: float(r.mean() / r.std(ddof=1) * np.sqrt(12))
     fit = sm.OLS(both.long_short_return, sm.add_constant(both.umd)).fit()
-    out = {"months": int(len(both)),
-           "first_month": both.date.min().strftime("%Y-%m"),
-           "last_month": both.date.max().strftime("%Y-%m"),
-           "correlation": float(both.long_short_return.corr(both.umd)),
-           "sharpe_backtest": sharpe(both.long_short_return),
-           "sharpe_umd": sharpe(both.umd),
-           "mean_monthly_backtest": float(both.long_short_return.mean()),
-           "mean_monthly_umd": float(both.umd.mean()),
-           "beta_on_umd": float(fit.params["umd"]),
-           "alpha_monthly": float(fit.params["const"]),
-           "alpha_t_statistic": float(fit.tvalues["const"])}
+    out = {
+        "months": int(len(both)),
+        "first_month": both.date.min().strftime("%Y-%m"),
+        "last_month": both.date.max().strftime("%Y-%m"),
+        "correlation": float(both.long_short_return.corr(both.umd)),
+        "sharpe_backtest": sharpe(both.long_short_return),
+        "sharpe_umd": sharpe(both.umd),
+        "mean_monthly_backtest": float(both.long_short_return.mean()),
+        "mean_monthly_umd": float(both.umd.mean()),
+        "beta_on_umd": float(fit.params["umd"]),
+        "alpha_monthly": float(fit.params["const"]),
+        "alpha_t_statistic": float(fit.tvalues["const"]),
+    }
     return out, both
