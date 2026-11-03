@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from momentum.backtest import build_momentum_panel, form_long_short, performance_statistics
+from momentum.backtest import build_momentum_panel, form_long_short, performance_statistics, turnover_statistics
 
 
 def synthetic_returns(n_stocks=20, n_months=18):
@@ -84,3 +84,26 @@ def test_stock_without_price_at_formation_is_not_ranked():
     gone = data[~((data.symbol == "S05") & (data.date >= dates[-2]))]   # stops after month -3
     _, ranked = form_long_short(build_momentum_panel(gone))
     assert "S05" not in set(ranked[ranked.date == dates[-1]].symbol)
+
+
+def test_newey_west_matches_ordinary_t_for_iid_returns():
+    rng = np.random.default_rng(3)
+    r = rng.normal(0.01, 0.05, 600)
+    out = performance_statistics(pd.DataFrame({"long_short_return": r, "market_return": rng.normal(size=600)}))
+    assert out["newey_west_lags"] == 5   # floor(4 · 6^(2/9)) = floor(5.96)
+    assert abs(out["t_statistic_newey_west"] - out["t_statistic"]) < 0.25 * abs(out["t_statistic"])
+
+
+def test_turnover_full_replacement_and_no_change():
+    dates = pd.date_range("2020-01-31", periods=3, freq="ME")
+    rows = []
+    # Long leg: {A, B} -> {A, B} -> {C, D}; short leg stays {X, Y}.
+    for d, longs in zip(dates, (["A", "B"], ["A", "B"], ["C", "D"])):
+        rows += [{"date": d, "symbol": s, "bucket": 10} for s in longs]
+        rows += [{"date": d, "symbol": s, "bucket": 1} for s in ("X", "Y")]
+    ranked = pd.DataFrame(rows)
+    strategy = pd.DataFrame({"date": dates, "long_short_return": [0.0, 0.01, 0.01]})
+    out = turnover_statistics(strategy, ranked)
+    assert np.isclose(out["mean_monthly_turnover_long"], 1.0)    # 0 then 2
+    assert np.isclose(out["mean_monthly_turnover_short"], 0.0)
+    assert np.isclose(out["break_even_cost_bps"], 0.01 / 1.0 * 1e4)

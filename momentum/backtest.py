@@ -103,6 +103,13 @@ def performance_statistics(data: pd.DataFrame) -> dict[str, float | int]:
         "annualized_sharpe_zero_rf": float(r.mean()/vol*np.sqrt(12)),
         "maximum_drawdown": float((wealth/wealth.cummax()-1).min()),
         "t_statistic": float(test.statistic), "p_value_two_sided": float(test.pvalue)}
+    # Newey-West t-statistic: robust to autocorrelation and heteroskedasticity in the
+    # monthly returns, with the usual automatic lag 4 (T/100)^(2/9).
+    lags = int(np.floor(4 * (len(r) / 100) ** (2 / 9)))
+    hac = sm.OLS(r.to_numpy(), np.ones(len(r))).fit(cov_type="HAC", cov_kwds={"maxlags": lags})
+    out["newey_west_lags"] = lags
+    out["t_statistic_newey_west"] = float(hac.tvalues[0])
+    out["p_value_newey_west"] = float(hac.pvalues[0])
     reg = data[["long_short_return", "market_return"]].dropna()
     if len(reg) >= 3:
         fit = sm.OLS(reg.long_short_return, sm.add_constant(reg.market_return)).fit()
@@ -120,3 +127,28 @@ def regime_statistics(data: pd.DataFrame) -> pd.DataFrame:
             "t_statistic": r.mean()/(vol/np.sqrt(len(r))) if vol > 0 else np.nan})
     return pd.DataFrame(rows)
 
+
+
+def turnover_statistics(strategy: pd.DataFrame, ranked: pd.DataFrame,
+                        quantiles: int = 10) -> dict[str, float]:
+    """Monthly turnover of the equal-weighted legs and the break-even trading cost.
+
+    Each leg holds weight 1/n in each of its n stocks. Turnover of a leg in month t is
+    sum |w_t − w_(t−1)| over stocks (1 = the whole leg replaced, 2 = sold and rebought in
+    full); price drift within the month is ignored. The long-short book trades both legs,
+    so its cost in month t is c × (turnover_long + turnover_short) for a cost c per unit
+    traded. The break-even c is the cost at which the mean monthly return falls to zero.
+    """
+    out = {}
+    total = None
+    for name, bucket in (("long", quantiles), ("short", 1)):
+        leg = ranked.loc[ranked.bucket == bucket, ["date", "symbol"]].copy()
+        leg["w"] = 1 / leg.groupby("date").symbol.transform("size")
+        w = leg.pivot(index="date", columns="symbol", values="w").fillna(0.0).sort_index()
+        turn = w.diff().abs().sum(axis=1).iloc[1:]
+        out[f"mean_monthly_turnover_{name}"] = float(turn.mean())
+        total = turn if total is None else total.add(turn, fill_value=0)
+    mean_ret = strategy.set_index("date").long_short_return.reindex(total.index).mean()
+    out["mean_monthly_turnover_total"] = float(total.mean())
+    out["break_even_cost_bps"] = float(mean_ret / total.mean() * 1e4)
+    return out

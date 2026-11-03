@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-from momentum.backtest import add_market_regime, build_momentum_panel, form_long_short, performance_statistics, regime_statistics
+from momentum.backtest import add_market_regime, build_momentum_panel, form_long_short, performance_statistics, regime_statistics, turnover_statistics
 from momentum.data import current_sp500_tickers, download_adjusted_prices, prices_to_monthly_returns, read_tickers
 
 
@@ -14,6 +14,8 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--start", default="2016-04-01"); p.add_argument("--end", default="2026-04-01")
     p.add_argument("--max-tickers", type=int, default=50); p.add_argument("--tickers-file")
+    p.add_argument("--market", default="^SP500TR", help="market index; the default total-return index includes dividends, like the adjusted stock prices")
+    p.add_argument("--missing-return", type=float, default=0.0, help="return assumed for a held stock that stops trading during the month")
     p.add_argument("--data-dir", type=Path, default=Path("data")); p.add_argument("--results-dir", type=Path, default=Path("results"))
     return p.parse_args()
 
@@ -27,11 +29,18 @@ def main():
     (a.results_dir/"universe.txt").write_text("\n".join(tickers)+"\n", encoding="utf-8")
     key = hashlib.sha256((",".join(tickers)+f"|{download_start}|{a.end}").encode()).hexdigest()[:12]
     prices = download_adjusted_prices(tickers, download_start, a.end, a.data_dir/f"stock_adjusted_close_{key}.csv")
-    strategy, ranked = form_long_short(build_momentum_panel(prices_to_monthly_returns(prices)))
+    strategy, ranked = form_long_short(build_momentum_panel(prices_to_monthly_returns(prices)), missing_return=a.missing_return)
     strategy = strategy.loc[(strategy.date >= start) & (strategy.date < end)].copy()
-    mp = download_adjusted_prices(["^GSPC"], download_start, a.end, a.data_dir/f"market_{key}.csv")
+    ranked = ranked.loc[(ranked.date >= start) & (ranked.date < end)].copy()
+    # The index symbol is part of the cache name, so changing --market never reads another index's cache.
+    market_tag = a.market.replace("^", "")
+    mp = download_adjusted_prices([a.market], download_start, a.end, a.data_dir/f"market_{market_tag}_{key}.csv")
     market = prices_to_monthly_returns(mp).rename(columns={"ret":"market_return"})
     final = add_market_regime(strategy, market); summary = performance_statistics(final)
+    summary.update(turnover_statistics(final, ranked))
+    summary["market_index"] = a.market
+    summary["missing_return_assumption"] = a.missing_return
+    summary["held_stock_months_without_return"] = int(final.n_long_missing.sum() + final.n_short_missing.sum())
     final.to_csv(a.results_dir/"monthly_strategy_returns.csv", index=False)
     ranked.to_csv(a.results_dir/"stock_month_assignments.csv", index=False)
     regime_statistics(final).to_csv(a.results_dir/"regime_statistics.csv", index=False)
