@@ -60,7 +60,7 @@ UMD itself earned a Sharpe of only 0.15 in this period, so **the weak result ref
 
 ### Trading costs
 
-Each leg replaces about 55% of its holdings every month (turnover 0.55 per leg, 1.11 for the long–short book). The mean return of 0.20% a month covers trading costs up to 23 bps per unit traded; a round trip of 10 bps per unit, for example, would cost about 0.11% a month and remove more than half the premium. Borrow fees for the short leg would come on top.
+Each leg replaces about 55% of its holdings every month (turnover 0.55 per leg, 1.11 for the long–short book). The mean return of 0.20% a month covers trading costs up to 23 bps per unit traded; a cost of 10 bps per unit traded, for example, would take about 0.11% a month (10 bps × 1.11) and remove more than half the premium. Borrow fees for the short leg would come on top.
 
 ### Effect of the survival fix
 
